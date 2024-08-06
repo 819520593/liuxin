@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>射击游戏</title>
+<style>
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #000;
+    margin: 0;
+  }
+  canvas {
+    border: 2px solid #000;
+  }
+</style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <button id="shootButton" style="position: absolute; top: 20px; right: 20px;">射击</button>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+
+      // 游戏状态
+      let score = 0;
+      let level = 1;
+      let npcSpeed = 2; // NPC 初始移动速度，第一关翻倍
+      let npcCount = 10; // NPC 数量翻十倍
+      let gameOver = false;
+      let isShooting = false; // 是否正在射击
+
+      // 主人公飞机模型
+      const hero = {
+        x: 50,
+        y: canvas.height / 2,
+        width: 50,
+        height: 20,
+        color: '#00f',
+        speed: 10, // 移动速度增加一倍
+        scorePerHit: 10,
+        isMovingUp: false,
+        isMovingDown: false,
+        isAttacking: false
+      };
+
+      // NPC 陨石模型
+      let npcs = [];
+      for (let i = 0; i < npcCount; i++) {
+        npcs.push({
+          x: canvas.width + Math.random() * 200,
+          y: Math.random() * (canvas.height - 20),
+          radius: 20,
+          speed: npcSpeed,
+          color: '#f00'
+        });
+      }
+
+      // 子弹模型
+      let bullets = [];
+
+      // 绘制主人公飞机
+      function drawHero() {
+        ctx.fillStyle = hero.color;
+        ctx.fillRect(hero.x, hero.y - hero.height / 2, hero.width, hero.height);
+        if (hero.isAttacking) {
+          ctx.fillStyle = '#ff0'; // 攻击时子弹颜色为黄色
+          ctx.fillRect(hero.x + hero.width, hero.y - 1, 10, 2);
+        }
+      }
+
+      // 绘制NPC陨石
+      function drawNPC() {
+        ctx.fillStyle = '#f00';
+        npcs.forEach(npc => {
+          ctx.beginPath();
+          ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.closePath();
+        });
+      }
+
+      // 绘制子弹
+      function drawBullets() {
+        ctx.fillStyle = '#ff0'; // 子弹颜色改为黄色
+        bullets.forEach(bullet => {
+          ctx.fillRect(bullet.x, bullet.y, 5, 2);
+        });
+      }
+
+      // 更新游戏状态
+      function update() {
+        if (gameOver) return;
+
+        // 清空画布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 绘制主人公飞机、NPC陨石和子弹
+        drawHero();
+        drawNPC();
+        drawBullets();
+
+        // 移动NPC
+        npcs.forEach(npc => {
+          npc.x -= npc.speed;
+          // 如果NPC移动到屏幕左侧外，重新设置其位置和速度
+          if (npc.x < 0) {
+            npc.x = canvas.width + Math.random() * 200;
+            npc.y = Math.random() * (canvas.height - 20);
+            npc.speed = npcSpeed * (level + 1); // 每关增加速度
+          }
+        });
+
+        // 检测碰撞
+        npcs.forEach(npc => {
+          if (npc.x < hero.x + hero.width && npc.x + npc.radius > hero.x &&
+              npc.y < hero.y + hero.height / 2 && npc.y + npc.radius > hero.y - hero.height / 2) {
+            gameOver = true;
+            showRestartButton();
+          }
+        });
+
+        // 移动和检测子弹
+        bullets = bullets.filter(bullet => {
+          bullet.x += 5; // 子弹速度
+          if (bullet.x > canvas.width) {
+            return false; // 超出画布范围移除子弹
+          }
+          // 检测子弹是否击中NPC
+          for (let i = 0; i < npcs.length; i++) {
+            const npc = npcs[i];
+            if (bullet.x > npc.x && bullet.x < npc.x + npc.radius &&
+                bullet.y > npc.y - npc.radius && bullet.y < npc.y + npc.radius) {
+              score += hero.scorePerHit;
+              npc.x = canvas.width + Math.random() * 200;
+              npc.y = Math.random() * (canvas.height - 20);
+              return false; // 移除击中的子弹
+            }
+          }
+          return true; // 保留未击中的子弹
+        });
+
+        // 显示得分
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Arial';
+        ctx.fillText(`Score: ${score} / Level: ${level}`, 10, 30);
+
+        // 判断是否过关
+        if (score >= level * 100) {
+          level++;
+          if (level > 3) {
+            gameWin();
+            return;
+          }
+          npcSpeed *= 2; // 下一关NPC移动速度加倍
+          npcs.forEach(npc => {
+            npc.speed = npcSpeed;
+          });
+        }
+
+        // 请求下一帧
+        requestAnimationFrame(update);
+      }
+
+      // 主人公飞船移动控制
+      function moveHero(event) {
+        if (event.key === 'ArrowUp') {
+          hero.isMovingUp = true;
+          if (hero.y > 0) {
+            hero.y -= hero.speed;
+          }
+        } else if (event.key === 'ArrowDown') {
+          hero.isMovingDown = true;
+          if (hero.y < canvas.height) {
+            hero.y += hero.speed;
+          }
+        }
+        if (event.key === ' ') {
+          hero.isAttacking = true;
+          bullets.push({ x: hero.x + hero.width, y: hero.y });
+        }
+      }
+
+      // 主人公飞船停止移动和攻击
+      function stopMoveHero(event) {
+        if (event.key === 'ArrowUp') {
+          hero.isMovingUp = false;
+        } else if (event.key === 'ArrowDown') {
+          hero.isMovingDown = false;
+        }
+        if (event.key === ' ') {
+          hero.isAttacking = false;
+        }
+      }
+
+      // 游戏胜利
+      function gameWin() {
+        gameOver = true;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '30px Arial';
+        ctx.fillText('剑魔是傻逼', canvas.width / 2 - 80, canvas.height / 2 - 50); // 向上移送一段距离
+        showRestartButton();
+      }
+
+      // 显示重新开始按钮
+      function showRestartButton() {
+        const button = document.createElement('button');
+        button.textContent = '重新开始';
+        button.style.position = 'absolute';
+        button.style.top = '30%'; // 调整按钮位置，不挡住文本
+        button.style.left = '50%';
+        button.style.transform = 'translate(-50%, -50%)';
+        button.style.padding = '10px 20px';
+        button.style.fontSize = '16px';
+        button.style.cursor = 'pointer';
+        button.addEventListener('click', function() {
+          score = 0;
+          level = 1;
+          npcSpeed = 2; // 第一关NPC移动速度翻倍
+          npcs = [];
+          for (let i = 0; i < npcCount; i++) {
+            npcs.push({
+              x: canvas.width + Math.random() * 200,
+              y: Math.random() * (canvas.height - 20),
+              radius: 20,
+              speed: npcSpeed,
+              color: '#f00'
+            });
+          }
+          gameOver = false;
+          bullets = [];
+          update();
+          button.parentNode.removeChild(button);
+        });
+        document.body.appendChild(button);
+      }
+
+      // 监听键盘事件控制主人公飞机移动和攻击
+      document.addEventListener('keydown', moveHero);
+      document.addEventListener('keyup', stopMoveHero);
+
+      // 初始化游戏
+      update();
+    });
+  </script>
+</body>
+</html>
